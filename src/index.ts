@@ -1,13 +1,37 @@
-const removeMd = require('remove-markdown');
+import { Application, GitHubAPI } from 'probot';
+import removeMd from 'remove-markdown';
 
-async function responsesData(method, options) {
-  function* paginationResponses(request, fromPage, toPage) {
+import {
+  Worker,
+  TermAmount,
+  FrequencyOfTerms,
+  ListForRepoParams,
+  Request,
+  RequestMethod,
+  ListCommentsParams,
+  ListForRepoResponseItem,
+  ListCommentsResponseItem,
+  Identifiable,
+  Issue,
+  Message,
+  Links,
+  Repository,
+} from './types';
+
+
+/**
+ * @param method A Ocktokit GET request
+ * @param options Options of the Ocktokit GET request
+ */
+async function responsesData<P, R extends Identifiable>(method: RequestMethod<P, R>, options: P) {
+  function* paginationResponses(request: Request<RequestMethod<P, R>, P>,
+    fromPage: number, toPage: number) {
     for (let page = fromPage; page <= toPage; page += 1) {
       yield request.method({ ...request.options, page });
     }
   }
 
-  function* matches(regex, text) {
+  function* matches(regex: RegExp, text: string) {
     let match = null;
     do {
       match = regex.exec(text);
@@ -19,10 +43,13 @@ async function responsesData(method, options) {
   const request = { method, options: optionsWithPagination };
 
   const firstResponse = await method(optionsWithPagination);
-  const regExp = /<(?<link>.+?)>;\srel="(?<rel>.+?)"/g;
+  /**
+   * Captures the relationship between pagination and your link
+   */
+  const regex = /<(?<link>.+?)>;\srel="(?<rel>.+?)"/g;
 
-  const links = Object.fromEntries([...matches(regExp, firstResponse.headers.link)]
-    .map(({ groups: { rel, link } }) => [rel, link]));
+  const links: Links = Object.fromEntries([...matches(regex, firstResponse.headers.link)]
+    .map(({ groups }) => [groups?.rel, groups?.link]));
 
   const { nextPage, lastPage } = Object.fromEntries(Object.entries(links)
     .map(([rel, link]) => [`${rel}Page`, Number(new URL(link).searchParams.get('page'))]));
@@ -38,17 +65,25 @@ async function responsesData(method, options) {
 }
 
 class KnowledgeBase {
+  workers: Worker[];
+
   constructor() { this.workers = []; }
 
-  async init(github, repository) {
+  async init(github: GitHubAPI, repository: Repository) {
     const owner = repository.owner.login;
     const repo = repository.name;
 
-    const getAction = (message, isMessageFromCreator) => {
-      const capitalize = (text) => text.charAt(0).toUpperCase() + text.slice(1);
+    const getAction = (message: Message, isMessageFromCreator: boolean) => {
+      const capitalize = (text: string) => text.charAt(0).toUpperCase() + text.slice(1);
       return {
         isMessageFromCreator,
+        /**
+         * Timestamp from ISO 8601 format (Complete date plus hours and minutes)
+         */
         timestamp: +new Date(message.createdAt),
+        /**
+         * Text without Markdown notation, links and remaining characters and spaces
+         */
         text: capitalize(removeMd(message.body.replace(/`{3}.*?`{3}/gs, ''))
           .replace(/\w*:?\/\/([\w_-]+(?:(?:\.[\w_-]+)+))([.,:\w?@#%&/^+=~-]*[\w?@#%&/^+=~-])?/g, '')
           .replace(/(?:\\(?:n|r|t|0)|[^a-zA-ZÀ-ÖØ-öø-ÿ0-9_.,¿?¡!'‘’“”"@#$%&+=-])+,*/g, ' ')
@@ -63,17 +98,25 @@ class KnowledgeBase {
       };
     };
 
-    const issues = await Promise.all(await responsesData(github.issues.listForRepo, { owner, repo })
-      .then((repositoryIssues) => repositoryIssues.map((repoIssue) => new Promise((resolve) => {
-        responsesData(github.issues.listComments, { owner, repo, issue_number: repoIssue.number })
-          .then((comments) => {
-            const { user, body, created_at: createdAt } = repoIssue;
-            const mappedComments = comments.map((comment) => ({
-              user: comment.user, body: comment.body, createdAt: comment.created_at,
-            }));
-            resolve({ user, messages: [{ user, body, createdAt }, ...mappedComments] });
-          });
-      }))));
+    /**
+     * Issues obtained by requesting all issues in the
+     * repository and subsequently all issue comments
+     */
+    const issues = await Promise.all(
+      await responsesData<ListForRepoParams,
+        ListForRepoResponseItem>(github.issues.listForRepo, { owner, repo })
+        .then((repositoryIssues) => repositoryIssues.map(
+          (repoIssue) => new Promise<Issue>((resolve) => {
+            responsesData<ListCommentsParams, ListCommentsResponseItem>(github.issues.listComments,
+              { owner, repo, issue_number: repoIssue.number })
+              .then((comments) => {
+                const { user, body, created_at: createdAt } = repoIssue;
+                const mappedComments = comments.map((comment) => ({
+                  user: comment.user, body: comment.body, createdAt: comment.created_at,
+                }));
+                resolve({ user, messages: [{ user, body, createdAt }, ...mappedComments] });
+              });
+          }))));
 
     issues.forEach((issue) => {
       const { user: creator, messages } = issue;
@@ -99,31 +142,40 @@ class KnowledgeBase {
   }
 
   getTerms() {
-    const regExp = /(?<=^|\s)['‘“"¿?¡!]*(?<term>.*?)[?!'’”".,-]*(?=\s|$)/g;
+    /**
+     * Captures the term by discarding special characters on both sides
+     */
+    const regex = /(?<=^|\s)['‘“"¿?¡!]*(?<term>.*?)[?!'’”".,-]*(?=\s|$)/g;
     return this.workers.flatMap(({ actions }) => actions.map(({ text }) => text))
-      .flatMap((text) => [...text.matchAll(regExp)].map(({ groups }) => groups.term.toLowerCase()));
+      .flatMap((text) => [...text.matchAll(regex)].map(({ groups }) => groups?.term.toLowerCase()));
   }
 
-  getLowestActionTimestamp(term) {
+  getLowestActionTimestamp(term: string) {
     return Math.min(...this.workers
-      .flatMap((worker) => this.constructor.getWorkerActionsWithTerm(worker, term))
+      .flatMap((worker) => KnowledgeBase.getWorkerActionsWithTerm(worker, term))
       .map((action) => action.timestamp));
   }
 
-  static getWorkerActionsWithTerm(worker, term) {
-    const regExp = new RegExp(`(?<=^|\\s)['‘“"¿?¡!]*${term}[?!'’”".,-]*(?=\\s|$)`, 'i');
-    return worker.actions.filter((action) => regExp.test(action.text));
+  static getWorkerActionsWithTerm(worker: Worker, term: string) {
+    /**
+     * Captures the term by discarding special characters on both sides
+     */
+    const regex = new RegExp(`(?<=^|\\s)['‘“"¿?¡!]*${term}[?!'’”".,-]*(?=\\s|$)`, 'i');
+    return worker.actions.filter((action) => regex.test(action.text));
   }
 }
 
-function whoKnows(term, knowledgeBase) {
-  const lowestActionTimestamp = knowledgeBase.getLowestActionTimestamp(term);
+function whoKnows(term: string, knowledgeBase: KnowledgeBase) {
+  /**
+   * The current timestamp
+   */
   const now = +new Date();
+  const lowestActionTimestamp = knowledgeBase.getLowestActionTimestamp(term);
 
   let suitableWorkerScore = 0;
-  let suitableWorker = null;
+  let suitableWorker: Worker | undefined;
 
-  knowledgeBase.workers.forEach((worker) => {
+  knowledgeBase.workers.forEach((worker: Worker) => {
     const workerActionsWithTerm = KnowledgeBase.getWorkerActionsWithTerm(worker, term);
     let score = 0;
 
@@ -141,7 +193,7 @@ function whoKnows(term, knowledgeBase) {
   return suitableWorker;
 }
 
-function howManyKnows(term, knowledgeBase) {
+function howManyKnows(term: string, knowledgeBase: KnowledgeBase) {
   let workersWithKnowledge = 0;
   let totalOfSpecialization = 0;
 
@@ -160,19 +212,22 @@ function howManyKnows(term, knowledgeBase) {
   return { proportionOfKnowledge, levelOfSpecialization };
 }
 
-function mostUsedTerms(knowledgeBase) {
+function mostUsedTerms(knowledgeBase: KnowledgeBase) {
   const termList = knowledgeBase.getTerms();
 
-  const frequencyOfTerms = termList.reduce((termAccumulator, term) => {
+  const frequencyOfTerms = termList.reduce<FrequencyOfTerms>((termAccumulator, term) => {
     const terms = termAccumulator;
-    if (term.length !== 0) {
+    if (term && term.length !== 0) {
       terms[term] = Object.prototype.hasOwnProperty.call(terms, term)
         ? terms[term] + 1 : 1;
     }
     return terms;
   }, {});
 
-  const comparator = (a, b) => {
+  /**
+   * Sort according to quantity, using alphabetical order as tiebreaker
+   */
+  const comparator = (a: TermAmount, b: TermAmount) => {
     if (a.amount > b.amount) return -1;
     if (a.amount < b.amount) return 1;
     if (a.term < b.term) return -1;
@@ -188,24 +243,40 @@ function mostUsedTerms(knowledgeBase) {
   return mostFrequentTerms;
 }
 
-const toPercentage = (number) => (number * 100).toFixed(2);
+const toPercentage = (number: number) => (number * 100).toFixed(2);
 
-module.exports = (app) => {
+module.exports = (app: Application) => {
   app.on('issue_comment.created', async (context) => {
     const { github, payload } = context;
     const { comment, sender, repository } = payload;
     const botName = process.env.BOT_NAME;
 
+    /**
+     * Verifica o padrão de mensagem para ativar as funções do robô e
+     * captura o identificador da função e o termo a ser usado.
+     */
     const question = new RegExp(`@${botName}\\s+(?<code>\\w+)(?:\\s+(?<term>\\S+))?`, 'i')
       .exec(comment.body);
 
     if (question) {
       const knowledgeBase = await new KnowledgeBase().init(github, repository);
-      const { groups: { code, term } } = question;
+      const { code, term } = question.groups ?? { code: '', term: '' };
+
       let parameters;
+
+      const checkTerm = (term: string) => {
+        if (!term) {
+          parameters = context.issue({
+            body: `@${sender.login}, termo não informado`
+          });
+          return false;
+        }
+        return true;
+      }
 
       switch (code.toUpperCase()) {
         case 'QUEMSABE': {
+          if (!checkTerm(term)) break;
           const whoKnowsResult = whoKnows(term, knowledgeBase);
           parameters = context.issue({
             body: `@${sender.login}, `
@@ -214,6 +285,7 @@ module.exports = (app) => {
           break;
         }
         case 'QUANTOSSABEM': {
+          if (!checkTerm(term)) break;
           const howManyKnowsResult = howManyKnows(term, knowledgeBase);
           parameters = context.issue({
             body: `@${sender.login},\n`
@@ -237,9 +309,7 @@ module.exports = (app) => {
         default: { break; }
       }
 
-      return github.issues.createComment(parameters);
+      github.issues.createComment(parameters);
     }
-
-    return null;
   });
 };
