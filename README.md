@@ -62,3 +62,9 @@ Para determinar quem é usuário que mais sabe sobre um termo, o algoritmo usa e
 - T<sup>*</sup> é o timestamp da ação mais antiga
 - wc é o trabalhador que criou a issue
 - now é timestamp no momento da decisão de escalonamento (horário do sistema).
+
+## Quantos sabem
+
+Para determinar a proporção de quantos sabem e a especialização, o algoritmo usa essas fórmulas:
+
+<img alt="Fórmula" src="https://latex.codecogs.com/svg.latex?awt%28w%2C%20t%29%20%3D%20%5C%7Ba%20%5Cmid%20a%20%5Cin%20w.a%20%5Cmid%20ts%20%5Cin%20a.m%20%5Cmid%20t%20%5Cin%20ts%5C%7D%20%5C%5C%20pok%20%3D%20%5Cfrac%7B%5Csum_%7Bw%20%5Cin%20ws%7D%20%5Cleft%28%5Cbegin%7Bcases%7D%7Cawt%28w%2Ct%29%7C%20%3E%200%20%26%201%5C%5C%7Cawt%28w%2Ct%29%7C%20%3D%200%20%26%200%20%5Cend%7Bcases%7D%5Cright%29%7D%7B%7Cws%7C%7D%20%5C%5C%20los%20%3D%20%5Cfrac%7B%5Csum_%7Bw%20%5Cin%20ws%7D%20%5Cleft%28%5Cbegin%7Bcases%7D%7Cawt%28w%2Ct%29%7C%20%3E%200%20%26%20%5Cfrac%7B%7Cawt%28w%2Ct%29%7C%7D%7B%7C%5C%7Ba%20%5Cmid%20a%20%5Cin%20w.a%5C%7D%7C%7D%20%5C%5C%20%7Cawt%28w%2Ct%29%7C%20%3D%200%20%26%200%20%5Cend%7Bcases%7D%5Cright%29%7D%7B%7Cws%7C%7D">
