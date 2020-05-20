@@ -1,8 +1,8 @@
-# SuitableBot
+# Woko-B
 
 ## Overview do projeto
 
-SuitableBot é um robô social criado com o [Probot](https://probot.github.io).
+Woko-B é um robô social criado com o [Probot](https://probot.github.io).
 Ele foi desenvolvido como um estudo de caso sobre desenvolvimento de componentes de software associados a computação por humanos.
 O estudo é parte do projeto PIBIC-CNPq coordenado pelo prof. Lesandro Ponciano e conduzido pelo aluno bolsista Gabriel Moreira Chaves, no curso Bacharelado em Engenharia de Software da Pontifícia Universidade Católica de Minas Gerais.
 
@@ -11,26 +11,36 @@ Pela funcionalidade de atribuição, o usuário informa um termo e o robô respo
 Pela funcionalidade de agregação, o usuário informa um termo e o robô responde ao usuário quantos participantes do repositório no qual o robô foi mencionado mais fala sobre aquele termo.
 Pela funcionalidade de frequência, o robô retorna os termos mais usados pelos participantes das issues do repositório no qual o robô foi mencionado.
 
-Para adicionar o robô ao seu repositório, instale-o a partir do link: [SuitableBot App](https://github.com/apps/suitablebot).
+Para adicionar o robô ao seu repositório, instale-o a partir do link: [Woko-B App](https://github.com/apps/Woko-B).
+
+### Projetos anteriores
+
+Este projeto é a continuação de projetos anteriores desenvolvidos no [grupo de pesquisa](https://github.com/ssmi-research-group), os projetos estão listados a seguir:
+
+- [arthursoas/WhoKnowsBot](https://github.com/arthursoas/WhoKnowsBot)
+- [EricRibeiro/WhoKnowsBot](https://github.com/EricRibeiro/WhoKnowsBot)
+- [ssmi-research-group/twitterCollaborativeBot](https://github.com/arthursoas/WhoKnowsBot)
+
+Como pode ser observado, esses projetos funcionavam no ambiente do Twitter, enquanto este projeto no ambiente GitHub.
 
 ## Como utilizar
 
-- Atribuição: `@SuitableBot QuemSabe <Termo>`
-- Agregação: `@SuitableBot QuantoSsabem <Termo>`
-- Frequência: `@SuitableBot OQueSabem`
+- Atribuição: `@Woko-B QuemSabe <Termo>`
+- Agregação: `@Woko-B QuantoSsabem <Termo>`
+- Frequência: `@Woko-B OQueSabem`
 
 Observação: A interpretação da mensagem informada ao robô é insensível a maiúsculas.
 
 ## Como funciona
 
-O SuitableBot ao ser instalado nos repositórios, possui acesso aos issues e aos seus comentários.
+O Woko-B ao ser instalado nos repositórios, possui acesso aos issues e aos seus comentários.
 Quando um comentário em uma issue é criado, o robô é notificado pelo GitHub, enviando as informações do comentário realizado.
-Com base nos dados recebidos o robõ analisa e identifica se ele se trata de uma comando ao robô.
+Com base nos dados recebidos, o robô analisa e identifica se ele se trata de uma comando ao robô.
 A partir disso ele executa o que foi solicitado e retorna os resultados obtidos por meio de um comentário na issue no qual ele foi mencionado e realiza a menção de quem solicitou a tarefa o robô.
 
 ## Base de conhecimento
 
-Antes da realização do comando solicitado, o robô monta a sua base de conhecimento, para isso ele solicita as informações de todas as issues do repositório no qual ele foi mencionado e coleta todos os comentários e o corpo da mensagem das issues. Com isso ele constroi a sua base de conhecimento, no qual o seu esquema está informado abaixo:
+Antes da realização do comando solicitado, o robô monta a sua base de conhecimento, para isso ele solicita as informações de todas as issues do repositório no qual ele foi mencionado e coleta todos os comentários e o corpo da mensagem das issues. Com isso ele constrói a sua base de conhecimento, no qual o seu esquema está informado abaixo:
 
 ```typescript
 interface Action {
