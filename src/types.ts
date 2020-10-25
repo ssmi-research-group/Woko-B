@@ -26,6 +26,19 @@ export interface TermAmount {
   amount: number;
 }
 
+export interface WorkerScore {
+  worker: Worker;
+  score: number;
+}
+
+export interface WorkersKnowledge {
+  name: string;
+  actions: {
+    withTerm: number;
+    total: number;
+  };
+}
+
 export type User = Octokit.IssuesListForRepoResponseItemUser;
 
 export interface Message {
@@ -59,3 +72,23 @@ export type RequestMethod<P, R extends Identifiable> = (
 ) => Promise<Octokit.Response<R[]>>;
 
 export type Repository = Webhooks.PayloadRepository;
+
+export enum Question {
+  WHO_KNOWS = "whoKnows",
+  HOW_MANY_KNOWS = "howManyKnows",
+  WHAT_THEY_KNOWS = "whatTheyKnows"
+}
+
+export interface Messages {
+  [Question.WHO_KNOWS]: (user: string, term: string, worker: string) => string;
+  [Question.HOW_MANY_KNOWS]: (user: string, term: string, proportionOfKnowledge: number, levelOfSpecialization: number) => string;
+  [Question.WHAT_THEY_KNOWS]: (user: string, terms: string[]) => string;
+}
+
+export interface Config {
+  keywords?: {
+    [question in Question]?: string;
+  } & {
+    explain: string;
+  }
+} 

@@ -1,0 +1,14 @@
+version: "3.5"
+
+services:
+  app:
+    container_name: woko-app
+    working_dir: /srv/app
+    command: sh -c 'yarn && yarn start'
+    restart: always
+    image: node
+    user: node:14.14.0
+    ports:
+      - "5000:3000"
+    volumes:
+      - .:/srv/app
